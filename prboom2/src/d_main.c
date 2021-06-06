@@ -1380,13 +1380,11 @@ static void L_SetupConsoleMasks(void) {
 
 static char *autoload_path = NULL;
 
-static char *GetAutoloadDir(const char *iwadname, dboolean createdir)
+static char *GetAutoloadBaseDir(int iter)
 {
-    char *result;
-    int len;
-
     if (autoload_path == NULL)
     {
+        int len;
         const char* exedir = I_DoomExeDir();
         len = doom_snprintf(NULL, 0, "%s/autoload", exedir);
         autoload_path = malloc(len+1);
@@ -1399,9 +1397,27 @@ static char *GetAutoloadDir(const char *iwadname, dboolean createdir)
     mkdir(autoload_path, 0755);
 #endif
 
-    len = doom_snprintf(NULL, 0, "%s/%s", autoload_path, iwadname);
+#ifdef WAD_INSTALL_PATH
+    if (iter == 0)
+      return WAD_INSTALL_PATH;
+    else if (iter == 1 && strcmp(autoload_path, WAD_INSTALL_PATH))
+      return autoload_path;
+#else
+    if (iter == 0)
+      return autoload_path;
+#endif
+    else
+      return NULL;
+}
+
+static char *GetAutoloadDir(const char *base, const char *iwadname, dboolean createdir)
+{
+    char *result;
+    int len;
+
+    len = doom_snprintf(NULL, 0, "%s/%s", base, iwadname);
     result = malloc(len+1);
-    doom_snprintf(result, len+1, "%s/%s", autoload_path, iwadname);
+    doom_snprintf(result, len+1, "%s/%s", base, iwadname);
 
     if (createdir)
     {
@@ -1471,30 +1487,39 @@ static void AutoLoadWADs(const char *path)
 
 void D_AutoloadIWadDir()
 {
-  char *autoload_dir;
+  int iter = 0;
+  char *base, *autoload_dir;
 
-  // common auto-loaded files for all Doom flavors
-  autoload_dir = GetAutoloadDir("doom-all", true);
-  AutoLoadWADs(autoload_dir);
-  free(autoload_dir);
+  while ((base = GetAutoloadBaseDir(iter++)))
+  {
+    // common auto-loaded files for all Doom flavors
+    autoload_dir = GetAutoloadDir(base, "doom-all", true);
+    AutoLoadWADs(autoload_dir);
+    free(autoload_dir);
 
-  // auto-loaded files per IWAD
-  autoload_dir = GetAutoloadDir(IWADBaseName(), true);
-  AutoLoadWADs(autoload_dir);
-  free(autoload_dir);
+    // auto-loaded files per IWAD
+    autoload_dir = GetAutoloadDir(base, IWADBaseName(), true);
+    AutoLoadWADs(autoload_dir);
+    free(autoload_dir);
+  }
 }
 
 static void D_AutoloadPWadDir()
 {
-  int i;
-  for (i = 0; i < numwadfiles; ++i)
-    if (wadfiles[i].src == source_pwad)
-    {
-      char *autoload_dir;
-      autoload_dir = GetAutoloadDir(BaseName(wadfiles[i].name), false);
-      AutoLoadWADs(autoload_dir);
-      free(autoload_dir);
-    }
+  int iter = 0, i;
+  char *base;
+
+  while ((base = GetAutoloadBaseDir(iter++)))
+  {
+    for (i = 0; i < numwadfiles; ++i)
+      if (wadfiles[i].src == source_pwad)
+      {
+        char *autoload_dir;
+        autoload_dir = GetAutoloadDir(base, BaseName(wadfiles[i].name), false);
+        AutoLoadWADs(autoload_dir);
+        free(autoload_dir);
+      }
+  }
 }
 
 // Load all dehacked patches from the given directory.
@@ -1523,30 +1548,39 @@ static void AutoLoadPatches(const char *path)
 
 static void D_AutoloadDehDir()
 {
-  char *autoload_dir;
+  int iter = 0;
+  char *base, *autoload_dir;
 
-  // common auto-loaded files for all Doom flavors
-  autoload_dir = GetAutoloadDir("doom-all", true);
-  AutoLoadPatches(autoload_dir);
-  free(autoload_dir);
+  while ((base = GetAutoloadBaseDir(iter++)))
+  {
+    // common auto-loaded files for all Doom flavors
+    autoload_dir = GetAutoloadDir(base, "doom-all", true);
+    AutoLoadPatches(autoload_dir);
+    free(autoload_dir);
 
-  // auto-loaded files per IWAD
-  autoload_dir = GetAutoloadDir(IWADBaseName(), true);
-  AutoLoadPatches(autoload_dir);
-  free(autoload_dir);
+    // auto-loaded files per IWAD
+    autoload_dir = GetAutoloadDir(base, IWADBaseName(), true);
+    AutoLoadPatches(autoload_dir);
+    free(autoload_dir);
+  }
 }
 
 static void D_AutoloadDehPWadDir()
 {
-  int i;
-  for (i = 0; i < numwadfiles; ++i)
-    if (wadfiles[i].src == source_pwad)
-    {
-      char *autoload_dir;
-      autoload_dir = GetAutoloadDir(BaseName(wadfiles[i].name), false);
-      AutoLoadPatches(autoload_dir);
-      free(autoload_dir);
-    }
+  int iter = 0, i;
+  char *base;
+
+  while ((base = GetAutoloadBaseDir(iter++)))
+  {
+    for (i = 0; i < numwadfiles; ++i)
+      if (wadfiles[i].src == source_pwad)
+      {
+        char *autoload_dir;
+        autoload_dir = GetAutoloadDir(base, BaseName(wadfiles[i].name), false);
+        AutoLoadPatches(autoload_dir);
+        free(autoload_dir);
+      }
+  }
 }
 
 //
@@ -1807,11 +1841,15 @@ static void D_DoomMainSetup(void)
   // Designed to be general, instead of specific to boomlump.wad
   // Some people might find this useful
   // cph - support MBF -noload parameter
-  if (!M_CheckParm("-noload")) {
+  {
     // only autoloaded wads here - autoloaded patches moved down below W_Init
-    int i;
+    int i, imax = MAXLOADFILES;
 
-    for (i=0; i<MAXLOADFILES; i++) {
+    // make sure to always autoload prboom-plus.wad
+    if (M_CheckParm("-noload"))
+      imax = 1;
+
+    for (i=0; i<imax; i++) {
       const char *fname = wad_files[i];
       char *fpath;
 
