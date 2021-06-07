@@ -1382,6 +1382,9 @@ static char *autoload_path = NULL;
 
 static char *GetAutoloadBaseDir(int iter)
 {
+    if (M_CheckParm("-noload"))
+      return NULL;
+
     if (autoload_path == NULL)
     {
         int len;
@@ -1397,17 +1400,19 @@ static char *GetAutoloadBaseDir(int iter)
     mkdir(autoload_path, 0755);
 #endif
 
-#ifdef WAD_INSTALL_PATH
-    if (iter == 0)
-      return WAD_INSTALL_PATH;
-    else if (iter == 1 && strcmp(autoload_path, WAD_INSTALL_PATH))
-      return autoload_path;
-#else
-    if (iter == 0)
-      return autoload_path;
-#endif
-    else
-      return NULL;
+    switch(i)
+    {
+      case 0:
+        return WAD_INSTALL_PATH;
+        break;
+      case 1:
+        if (strcmp(autoload_path, WAD_INSTALL_PATH))
+          return autoload_path;
+        // fall through
+      default:
+        return NULL;
+        break;
+    }
 }
 
 static char *GetAutoloadDir(const char *base, const char *iwadname, dboolean createdir)
