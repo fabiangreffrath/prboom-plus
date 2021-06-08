@@ -1378,41 +1378,52 @@ static void L_SetupConsoleMasks(void) {
 // Calculate the path to the directory for autoloaded WADs/DEHs.
 // Creates the directory as necessary.
 
-static char *autoload_path = NULL;
-
-static char *GetAutoloadBaseDir(int iter)
+static char *GetAutoloadBaseDir(unsigned int iter)
 {
+    static char **autoload_paths = NULL;
+    static const struct {
+        const char *dir;
+        const char *(*func)(void);
+    } basedirs[] = {
+        {NULL, I_DoomExeDir},
+        {PRBOOMDATADIR},
+    };
+    static const size_t num_basedirs = sizeof(basedirs)/sizeof(*basedirs);
+
     if (M_CheckParm("-noload"))
       return NULL;
 
-    if (autoload_path == NULL)
+    if (autoload_paths == NULL)
     {
-        int len;
-        const char* exedir = I_DoomExeDir();
-        len = doom_snprintf(NULL, 0, "%s/autoload", exedir);
-        autoload_path = malloc(len+1);
-        doom_snprintf(autoload_path, len+1, "%s/autoload", exedir);
-    }
+        int i;
 
+        autoload_paths = malloc(num_basedirs * sizeof(*autoload_paths));
+
+        for (i = 0; i < num_basedirs; i++)
+        {
+            int len;
+            const char* dir;
+
+            if (basedirs[i].func)
+                dir = basedirs[i].func();
+            else
+                dir = basedirs[i].dir;
+
+            len = doom_snprintf(NULL, 0, "%s/autoload", dir);
+            autoload_paths[i] = malloc(len+1);
+            doom_snprintf(autoload_paths[i], len+1, "%s/autoload", dir);
 #ifdef _WIN32
-    mkdir(autoload_path);
+            mkdir(autoload_paths[i]);
 #else
-    mkdir(autoload_path, 0755);
+            mkdir(autoload_paths[i], 0755);
 #endif
-
-    switch(i)
-    {
-      case 0:
-        return WAD_INSTALL_PATH;
-        break;
-      case 1:
-        if (strcmp(autoload_path, WAD_INSTALL_PATH))
-          return autoload_path;
-        // fall through
-      default:
-        return NULL;
-        break;
+        }
     }
+
+    if (iter < num_basedirs)
+        return autoload_paths[iter];
+    else
+        return NULL;
 }
 
 static char *GetAutoloadDir(const char *base, const char *iwadname, dboolean createdir)
@@ -1846,15 +1857,11 @@ static void D_DoomMainSetup(void)
   // Designed to be general, instead of specific to boomlump.wad
   // Some people might find this useful
   // cph - support MBF -noload parameter
-  {
+  if (!M_CheckParm("-noload")) {
     // only autoloaded wads here - autoloaded patches moved down below W_Init
-    int i, imax = MAXLOADFILES;
+    int i;
 
-    // make sure to always autoload prboom-plus.wad
-    if (M_CheckParm("-noload"))
-      imax = 1;
-
-    for (i=0; i<imax; i++) {
+    for (i=0; i<MAXLOADFILES; i++) {
       const char *fname = wad_files[i];
       char *fpath;
 
