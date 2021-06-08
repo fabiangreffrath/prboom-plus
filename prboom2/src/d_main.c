@@ -1385,8 +1385,8 @@ static char *GetAutoloadBaseDir(unsigned int iter)
         const char *dir;
         const char *(*func)(void);
     } basedirs[] = {
-        {NULL, I_DoomExeDir},
-        {PRBOOMDATADIR},
+        {PRBOOMDATADIR}, // supplemental data directory
+        {NULL, I_DoomExeDir},  // config directory
     };
     static const size_t num_basedirs = sizeof(basedirs)/sizeof(*basedirs);
 
